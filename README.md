@@ -1,3 +1,3 @@
-# geman-cv-generator
+# german-cv-generator
 
-[![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-9jxr9rgt)
+A modern German CV generator built with React, TypeScript, and Vite.

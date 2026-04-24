@@ -161,6 +161,28 @@ const result = await generateText({
 | Google Gemini | `AI...` | `gemini-1.5-pro` | `generativelanguage.googleapis.com` |
 | Anthropic | `sk-ant-...` | `claude-3-5-sonnet-20241022` | `api.anthropic.com` |
 
+### 3.5 Multi-Provider AI Requirements
+
+#### Overview
+The application must support multiple AI providers (OpenAI, Google Gemini, Anthropic) to give users flexibility in choosing their preferred AI service. All providers use Bring-Your-Own-Key (BYOK) model - users supply their own API keys.
+
+#### Technical Constraints
+- **Token Efficiency**: All AI operations must minimize token usage. Implement prompt optimization, caching, and incremental processing to stay within reasonable limits.
+- **Unified Interface**: Use Vercel AI SDK for consistent API across providers.
+- **Fallback Handling**: Graceful degradation if a provider fails or quota is exceeded.
+- **Cost Awareness**: Display estimated token costs and allow users to select cost-effective models.
+
+#### Provider Configuration
+- Each provider has independent API key, model selection, and enable/disable toggle.
+- Active provider selection for current session.
+- Secure key storage in localStorage with optional encryption.
+
+#### AI Features
+- CV text polishing and optimization
+- ATS-friendly formatting suggestions
+- German language support with DIN 5008 compliance
+- Contextual improvements based on job descriptions
+
 ---
 
 ## 4. DIN 5008 Layout Requirements

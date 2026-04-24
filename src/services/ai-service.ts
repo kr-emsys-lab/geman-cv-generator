@@ -50,20 +50,51 @@ class AIService {
     const activeProvider = this.providers.activeProvider;
     const config = this.providers[activeProvider];
 
+    console.log('getProvider called:', {
+      activeProvider,
+      config: {
+        enabled: config.enabled,
+        apiKeyLength: config.apiKey?.length,
+        apiKeyPrefix: config.apiKey?.substring(0, 10),
+        model: config.model
+      }
+    });
+
     if (!config.enabled || !config.apiKey) {
       throw new Error(`Provider ${activeProvider} not configured`);
     }
 
+    let provider;
     switch (activeProvider) {
       case 'openai':
-        return openai(config.model, { apiKey: config.apiKey });
+        provider = openai(config.model, { apiKey: config.apiKey });
+        break;
       case 'gemini':
-        return google(config.model, { apiKey: config.apiKey });
+        console.log('Creating Google provider with:', {
+          model: config.model,
+          apiKeyLength: config.apiKey.length,
+          apiKeyPrefix: config.apiKey.substring(0, 10)
+        });
+        // Set environment variable for Google Generative AI SDK
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY = config.apiKey;
+        provider = google(config.model);
+        break;
       case 'anthropic':
-        return anthropic(config.model, { apiKey: config.apiKey });
+        console.log('Creating Anthropic provider with:', {
+          model: config.model,
+          apiKeyLength: config.apiKey.length,
+          apiKeyPrefix: config.apiKey.substring(0, 10)
+        });
+        // Set environment variable for Anthropic SDK
+        process.env.ANTHROPIC_API_KEY = config.apiKey;
+        provider = anthropic(config.model);
+        break;
       default:
         throw new Error(`Unknown provider: ${activeProvider}`);
     }
+
+    console.log('Provider created successfully:', typeof provider);
+    return provider;
   }
 
   private getSystemPrompt(language: 'de' | 'en', mode: 'standard' | 'ats-optimized'): string {
@@ -177,12 +208,22 @@ RESPONSE: Return only the revised text, without comments or explanations.`;
     const { text, context, mode } = request;
     const { language } = context;
 
+    console.log('Starting polishText with:', {
+      text: text.substring(0, 50) + '...',
+      language,
+      mode,
+      providersConfigured: !!this.providers
+    });
+
     try {
       const systemPrompt = this.getSystemPrompt(language, mode);
       const contextPrompt = this.getContextPrompt(context, language);
       const userMessage = `${contextPrompt}\n\n${text}`;
 
+      console.log('Getting provider...');
       const provider = this.getProvider();
+      console.log('Provider obtained, making generateText call...');
+
       const response = await generateText({
         model: provider,
         system: systemPrompt,
@@ -191,6 +232,7 @@ RESPONSE: Return only the revised text, without comments or explanations.`;
         maxTokens: 1024
       });
 
+      console.log('generateText call successful');
       const polishedText = response.text || text;
 
       return {
@@ -200,6 +242,13 @@ RESPONSE: Return only the revised text, without comments or explanations.`;
 
     } catch (error) {
       console.error('AI polish request failed:', error);
+      console.error('Error details:', {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        name: error instanceof Error ? error.name : 'Unknown',
+        stack: error instanceof Error ? error.stack : 'No stack trace',
+        provider: this.providers?.activeProvider,
+        model: this.providers ? this.providers[this.providers.activeProvider]?.model : 'Unknown'
+      });
       throw new Error(
         error instanceof Error
           ? `Failed to polish text: ${error.message}`

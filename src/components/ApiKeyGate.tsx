@@ -63,12 +63,19 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
     const config = providers[provider];
     if (!config.apiKey || !config.enabled) return;
 
+    console.log(`Testing provider: ${provider}`, {
+      apiKey: config.apiKey.substring(0, 10) + '...',
+      model: config.model,
+      enabled: config.enabled
+    });
+
     setIsValidating(true);
     try {
       // Temporarily set this provider as active for testing
       const testProviders = { ...providers, activeProvider: provider };
       aiService.setProviders(testProviders);
 
+      console.log('Making test API call...');
       await aiService.polishText({
         text: 'Test',
         context: {
@@ -78,8 +85,10 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
         mode: 'standard'
       });
 
+      console.log('Test API call successful!');
       setErrors(prev => ({ ...prev, [provider]: '' }));
     } catch (error) {
+      console.error(`Test failed for provider ${provider}:`, error);
       setErrors(prev => ({
         ...prev,
         [provider]: 'API-Schlüssel konnte nicht validiert werden. Bitte überprüfen Sie ihn.'
@@ -256,4 +265,4 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
       </div>
     </div>
   );
-}import React, { useState } from 'react';
+}

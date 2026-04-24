@@ -3,30 +3,32 @@ import { ApiKeyGate } from './components/ApiKeyGate';
 import { CVPreview } from './components/CVPreview';
 import { DesignToggle } from './components/DesignToggle';
 import { CVData, defaultCVData } from './types/cv-data';
-import { useLocalStorage, useApiKey } from './hooks/useLocalStorage';
+import { useLocalStorage } from './hooks/useLocalStorage';
 import { aiService } from './services/ai-service';
+import { AIProviders, defaultAIProviders } from './types/ai-providers';
 import { Settings, Download, Globe } from 'lucide-react';
 
 function App() {
-  const [apiKey, setApiKey, clearApiKey] = useApiKey();
+  const [aiProviders, setAiProviders] = useLocalStorage<AIProviders>('cv_ai_providers', defaultAIProviders);
   const [cvData, setCvData] = useLocalStorage<CVData>('cv_data', defaultCVData);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Initialize AI service with stored API key
+  // Initialize AI service with stored providers
   useEffect(() => {
-    if (apiKey) {
-      aiService.setApiKey(apiKey);
+    if (aiProviders) {
+      aiService.setProviders(aiProviders);
     }
-  }, [apiKey]);
+  }, [aiProviders]);
 
-  const handleApiKeySet = (key: string) => {
-    setApiKey(key);
-    aiService.setApiKey(key);
+  const handleProvidersSet = (providers: AIProviders) => {
+    setAiProviders(providers);
+    aiService.setProviders(providers);
   };
 
-  const handleClearApiKey = () => {
-    clearApiKey();
-    aiService.clearApiKey();
+  const handleClearProviders = () => {
+    const clearedProviders = { ...defaultAIProviders };
+    setAiProviders(clearedProviders);
+    aiService.clearProviders();
   };
 
   const updateCvData = (updates: Partial<CVData>) => {
@@ -51,9 +53,9 @@ function App() {
     });
   };
 
-  // Show API key gate if no key is stored
-  if (!apiKey) {
-    return <ApiKeyGate onApiKeySet={handleApiKeySet} />;
+  // Show API key gate if no providers are configured
+  if (!aiService.isConfigured()) {
+    return <ApiKeyGate onProvidersSet={handleProvidersSet} />;
   }
 
   return (
@@ -119,10 +121,10 @@ function App() {
                 
                 <div className="space-y-3">
                   <button
-                    onClick={handleClearApiKey}
+                    onClick={handleClearProviders}
                     className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                   >
-                    {cvData.meta.language === 'de' ? 'API-Schlüssel löschen' : 'Clear API Key'}
+                    {cvData.meta.language === 'de' ? 'API-Schlüssel löschen' : 'Clear API Keys'}
                   </button>
                   
                   <div className="pt-2 border-t border-gray-200">

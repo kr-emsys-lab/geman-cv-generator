@@ -1,3 +1,9 @@
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { google } from '@ai-sdk/google';
+import { anthropic } from '@ai-sdk/anthropic';
+import { AIProviders } from '../types/ai-providers';
+
 interface AIPolishRequest {
   text: string;
   context: {
@@ -15,22 +21,53 @@ interface AIPolishResponse {
 }
 
 class AIService {
-  private apiKey: string | null = null;
+  private providers: AIProviders | null = null;
 
-  setApiKey(key: string) {
-    this.apiKey = key;
+  setProviders(providers: AIProviders) {
+    this.providers = providers;
   }
 
-  clearApiKey() {
-    this.apiKey = null;
+  clearProviders() {
+    this.providers = null;
   }
 
   isConfigured(): boolean {
-    return !!this.apiKey && this.apiKey.startsWith('sk-ant-');
+    if (!this.providers) return false;
+    const activeProvider = this.providers[this.providers.activeProvider];
+    return activeProvider.enabled && !!activeProvider.apiKey;
+  }
+
+  validateApiKey(key: string): boolean {
+    // Basic format validation for each provider
+    return key.startsWith('sk-proj-') || key.startsWith('sk-') || // OpenAI
+           key.startsWith('AI') || // Google Gemini
+           key.startsWith('sk-ant-'); // Anthropic
+  }
+
+  private getProvider() {
+    if (!this.providers) throw new Error('No providers configured');
+
+    const activeProvider = this.providers.activeProvider;
+    const config = this.providers[activeProvider];
+
+    if (!config.enabled || !config.apiKey) {
+      throw new Error(`Provider ${activeProvider} not configured`);
+    }
+
+    switch (activeProvider) {
+      case 'openai':
+        return openai(config.model, { apiKey: config.apiKey });
+      case 'gemini':
+        return google(config.model, { apiKey: config.apiKey });
+      case 'anthropic':
+        return anthropic(config.model, { apiKey: config.apiKey });
+      default:
+        throw new Error(`Unknown provider: ${activeProvider}`);
+    }
   }
 
   private getSystemPrompt(language: 'de' | 'en', mode: 'standard' | 'ats-optimized'): string {
-    const basePrompt = language === 'de' 
+    const basePrompt = language === 'de'
       ? `Du bist ein erfahrener deutscher HR-Experte und Karriereberater mit über 15 Jahren Erfahrung im deutschen Arbeitsmarkt. Du hilfst dabei, Lebensläufe nach deutschen Standards (DIN 5008) zu optimieren.`
       : `You are an experienced German HR expert and career consultant with over 15 years of experience in the German job market. You help optimize CVs according to German standards (DIN 5008).`;
 
@@ -134,7 +171,7 @@ RESPONSE: Return only the revised text, without comments or explanations.`;
 
   async polishText(request: AIPolishRequest): Promise<AIPolishResponse> {
     if (!this.isConfigured()) {
-      throw new Error('AI service not configured. Please set your Anthropic API key.');
+      throw new Error('AI service not configured. Please configure your API keys.');
     }
 
     const { text, context, mode } = request;
@@ -145,35 +182,16 @@ RESPONSE: Return only the revised text, without comments or explanations.`;
       const contextPrompt = this.getContextPrompt(context, language);
       const userMessage = `${contextPrompt}\n\n${text}`;
 
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': this.apiKey!,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-3-5-sonnet-20241022',
-          max_tokens: 1024,
-          temperature: 0,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: userMessage
-            }
-          ]
-        })
+      const provider = this.getProvider();
+      const response = await generateText({
+        model: provider,
+        system: systemPrompt,
+        prompt: userMessage,
+        temperature: 0,
+        maxTokens: 1024
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`API request failed: ${response.status} ${response.statusText}. ${errorData.error?.message || ''}`);
-      }
-
-      const data = await response.json();
-      const polishedText = data.content?.[0]?.text || text;
+      const polishedText = response.text || text;
 
       return {
         polishedText: polishedText.trim(),
@@ -183,15 +201,11 @@ RESPONSE: Return only the revised text, without comments or explanations.`;
     } catch (error) {
       console.error('AI polish request failed:', error);
       throw new Error(
-        error instanceof Error 
+        error instanceof Error
           ? `Failed to polish text: ${error.message}`
           : 'Failed to polish text: Unknown error'
       );
     }
-  }
-
-  validateApiKey(key: string): boolean {
-    return key.startsWith('sk-ant-') && key.length > 20;
   }
 }
 

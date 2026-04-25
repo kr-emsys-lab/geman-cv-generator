@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Key, Eye, EyeOff, AlertCircle, CheckCircle, Settings } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Key, Eye, EyeOff, AlertCircle, CheckCircle, Settings, Globe } from 'lucide-react';
 import { aiService } from '../services/ai-service';
 import { AIProviders, defaultAIProviders } from '../types/ai-providers';
 
@@ -13,21 +13,37 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isValidating, setIsValidating] = useState(false);
   const [activeTab, setActiveTab] = useState<'openai' | 'gemini' | 'anthropic'>('openai');
+  const [language, setLanguage] = useState<'de' | 'en'>('de');
+
+  // Load language preference from localStorage
+  useEffect(() => {
+    const savedLanguage = localStorage.getItem('cv_app_language');
+    if (savedLanguage === 'en' || savedLanguage === 'de') {
+      setLanguage(savedLanguage);
+    }
+  }, []);
+
+  // Save language preference to localStorage
+  const toggleLanguage = () => {
+    const newLanguage = language === 'de' ? 'en' : 'de';
+    setLanguage(newLanguage);
+    localStorage.setItem('cv_app_language', newLanguage);
+  };
 
   const providerConfigs = {
     openai: {
-      name: 'OpenAI',
-      keyFormat: 'sk-proj-... or sk-...',
+      name: language === 'de' ? 'OpenAI' : 'OpenAI',
+      keyFormat: language === 'de' ? 'sk-proj-... oder sk-...' : 'sk-proj-... or sk-...',
       models: ['gpt-4o', 'gpt-4o-mini'] as const
     },
     gemini: {
-      name: 'Google Gemini',
+      name: language === 'de' ? 'Google Gemini' : 'Google Gemini',
       keyFormat: 'AI...',
       models: ['gemini-1.5-pro', 'gemini-2.0-flash-exp'] as const
     },
     anthropic: {
-      name: 'Anthropic',
-      keyFormat: 'sk-ant-...',
+      name: language === 'de' ? 'Anthropic' : 'Anthropic',
+      keyFormat: language === 'de' ? 'sk-ant-...' : 'sk-ant-...',
       models: ['claude-3-5-sonnet-20241022', 'claude-3-5-haiku-20241022'] as const
     }
   };
@@ -69,7 +85,10 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
       enabled: config.enabled
     });
 
+    // Update status to testing
+    handleProviderChange(provider, 'status', 'testing');
     setIsValidating(true);
+
     try {
       // Temporarily set this provider as active for testing
       const testProviders = { ...providers, activeProvider: provider };
@@ -86,12 +105,16 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
       });
 
       console.log('Test API call successful!');
+      handleProviderChange(provider, 'status', 'connected');
       setErrors(prev => ({ ...prev, [provider]: '' }));
     } catch (error) {
       console.error(`Test failed for provider ${provider}:`, error);
+      handleProviderChange(provider, 'status', 'error');
       setErrors(prev => ({
         ...prev,
-        [provider]: 'API-Schlüssel konnte nicht validiert werden. Bitte überprüfen Sie ihn.'
+        [provider]: language === 'de' 
+          ? 'API-Schlüssel konnte nicht validiert werden. Bitte überprüfen Sie ihn.'
+          : 'API key could not be validated. Please check it.'
       }));
     } finally {
       setIsValidating(false);
@@ -108,7 +131,10 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
     });
 
     if (!hasValidProvider) {
-      setErrors({ general: 'Bitte konfigurieren Sie mindestens einen AI-Anbieter.' });
+      setErrors({ general: language === 'de' 
+        ? 'Bitte konfigurieren Sie mindestens einen AI-Anbieter.' 
+        : 'Please configure at least one AI provider.' 
+      });
       return;
     }
 
@@ -134,10 +160,26 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl p-8 max-w-2xl w-full">
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
+          {/* Language Toggle */}
+          <button
+            onClick={toggleLanguage}
+            className="absolute top-0 right-0 flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+          >
+            <Globe className="w-4 h-4" />
+            {language === 'de' ? 'English' : 'Deutsch'}
+          </button>
+          
           <Settings className="mx-auto h-12 w-12 text-blue-600 mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">AI-Anbieter konfigurieren</h1>
-          <p className="text-gray-600 mt-2">Wählen Sie mindestens einen AI-Anbieter aus und geben Sie Ihren API-Schlüssel ein.</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            {language === 'de' ? 'AI-Anbieter konfigurieren' : 'Configure AI Providers'}
+          </h1>
+          <p className="text-gray-600 mt-2">
+            {language === 'de' 
+              ? 'Wählen Sie mindestens einen AI-Anbieter aus und geben Sie Ihren API-Schlüssel ein.'
+              : 'Select at least one AI provider and enter your API key.'
+            }
+          </p>
         </div>
 
         {errors.general && (
@@ -150,20 +192,31 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
         <form onSubmit={handleSubmit}>
           {/* Provider Tabs */}
           <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
-            {Object.entries(providerConfigs).map(([key, config]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key as keyof AIProviders)}
-                className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-                  activeTab === key
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {config.name}
-              </button>
-            ))}
+            {Object.entries(providerConfigs).map(([key, config]) => {
+              const providerStatus = providers[key as keyof AIProviders].status;
+              const statusColor = {
+                connected: 'bg-green-500',
+                disconnected: 'bg-gray-400',
+                testing: 'bg-yellow-500 animate-pulse',
+                error: 'bg-red-500'
+              }[providerStatus];
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveTab(key as keyof AIProviders)}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    activeTab === key
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <div className={`w-2 h-2 rounded-full ${statusColor}`}></div>
+                  {config.name}
+                </button>
+              );
+            })}
           </div>
 
           {/* Provider Configuration */}
@@ -179,7 +232,7 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label htmlFor={`${key}-enabled`} className="ml-2 text-sm font-medium text-gray-900">
-                    {config.name} aktivieren
+                    {config.name} {language === 'de' ? 'aktivieren' : 'enable'}
                   </label>
                 </div>
 
@@ -187,7 +240,7 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
                   <>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        API-Schlüssel ({config.keyFormat})
+                        {language === 'de' ? 'API-Schlüssel' : 'API Key'} ({config.keyFormat})
                       </label>
                       <div className="relative">
                         <input
@@ -197,7 +250,7 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
                           className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10 ${
                             errors[key] ? 'border-red-300' : 'border-gray-300'
                           }`}
-                          placeholder={`Ihr ${config.name} API-Schlüssel`}
+                          placeholder={`${language === 'de' ? 'Ihr' : 'Your'} ${config.name} ${language === 'de' ? 'API-Schlüssel' : 'API Key'}`}
                         />
                         <button
                           type="button"
@@ -218,7 +271,7 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Modell
+                        {language === 'de' ? 'Modell' : 'Model'}
                       </label>
                       <select
                         value={providers[key as keyof AIProviders].model}
@@ -242,7 +295,7 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
                       ) : (
                         <CheckCircle className="h-4 w-4 mr-2" />
                       )}
-                      Verbindung testen
+                      {language === 'de' ? 'Verbindung testen' : 'Test Connection'}
                     </button>
                   </>
                 )}
@@ -255,12 +308,15 @@ export function ApiKeyGate({ onProvidersSet }: ApiKeyGateProps) {
             disabled={enabledProviders.length === 0 || isValidating}
             className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed mt-6 font-medium"
           >
-            Konfiguration speichern
+            {language === 'de' ? 'Konfiguration speichern' : 'Save Configuration'}
           </button>
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
-          Ihre API-Schlüssel werden nur lokal in Ihrem Browser gespeichert und niemals an Server gesendet.
+          {language === 'de' 
+            ? 'Ihre API-Schlüssel werden nur lokal in Ihrem Browser gespeichert und niemals an Server gesendet.'
+            : 'Your API keys are stored locally in your browser only and are never sent to servers.'
+          }
         </div>
       </div>
     </div>

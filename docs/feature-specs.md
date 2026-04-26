@@ -7,6 +7,8 @@
 - Show status indicator for active provider (green/red)
 - Provide a privacy reset button to clear all stored keys
 - Minimize token usage with prompt optimization and caching
+- First screen must explain the product and offer two start paths: `Create CV from scratch` or `Upload existing CV`
+- Provider setup should appear as the next step after the user chooses their entry path
 
 ## User CV Upload
 - Accept `.pdf` and `.docx` files

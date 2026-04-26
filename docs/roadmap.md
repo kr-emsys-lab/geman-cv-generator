@@ -13,11 +13,13 @@
 - ✅ Enhanced settings panel with provider management
 - ✅ Add language toggle (German/English) to first page
 - **Status**: All Phase 2 features implemented and tested
+- **Known issue**: Validate key still has issues
 
 ## Phase 3: CV Upload and AI Review
 - Add PDF/Word upload support
 - Parse uploaded CV text
 - Use AI to suggest targeted improvements
+- Design a landing page with clear paths: create a CV from scratch or upload an existing one
 - Approval checkpoint: upload parsing and suggestion quality
 
 ## Phase 4: Testing and Release

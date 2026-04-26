@@ -2,16 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { ApiKeyGate } from './components/ApiKeyGate';
 import { CVPreview } from './components/CVPreview';
 import { DesignToggle } from './components/DesignToggle';
+import { CVForm } from './components/CVForm';
 import { CVData, defaultCVData } from './types/cv-data';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import { aiService } from './services/ai-service';
 import { AIProviders, defaultAIProviders } from './types/ai-providers';
-import { Settings, Download, Globe } from 'lucide-react';
+import { Settings, Download, Globe, ArrowLeft, Upload, FileText } from 'lucide-react';
 
 function App() {
   const [aiProviders, setAiProviders] = useLocalStorage<AIProviders>('cv_ai_providers', defaultAIProviders);
   const [cvData, setCvData] = useLocalStorage<CVData>('cv_data', defaultCVData);
+  const [language, setLanguage] = useLocalStorage<'de' | 'en'>('cv_app_language', cvData.meta.language);
   const [showSettings, setShowSettings] = useState(false);
+  const [mode, setMode] = useLocalStorage<'create' | 'upload'>('cv_mode', 'create');
 
   // Initialize AI service with stored providers
   useEffect(() => {
@@ -25,6 +28,69 @@ function App() {
     aiService.setProviders(providers);
   };
 
+  const handleUploadParsed = (fileName: string, text: string) => {
+    // Parse the uploaded CV text and populate form fields
+    const parsedData = parseUploadedCV(text);
+    updateCvData({
+      ...parsedData,
+      upload: {
+        fileName,
+        text,
+        parsedAt: new Date().toISOString()
+      }
+    });
+  };
+
+  const parseUploadedCV = (text: string): Partial<CVData> => {
+    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+    const parsed: Partial<CVData> = {};
+
+    // Simple parsing logic - this could be enhanced with AI later
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].toLowerCase();
+
+      // Personal information
+      if (!parsed.personal) parsed.personal = { ...cvData.personal };
+
+      // Name detection (usually first line or prominent)
+      if (i < 3 && line.split(' ').length >= 2 && !line.includes('@') && !line.includes('straße') && !line.includes('str.')) {
+        const nameParts = lines[i].split(' ');
+        if (nameParts.length >= 2) {
+          parsed.personal.firstName = nameParts[0];
+          parsed.personal.lastName = nameParts.slice(1).join(' ');
+        }
+      }
+
+      // Email
+      if (line.includes('@') && line.includes('.')) {
+        const emailMatch = lines[i].match(/[\w.-]+@[\w.-]+\.\w+/);
+        if (emailMatch) {
+          parsed.personal.email = emailMatch[0];
+        }
+      }
+
+      // Phone
+      const phoneMatch = lines[i].match(/(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/);
+      if (phoneMatch && !parsed.personal.phone) {
+        parsed.personal.phone = phoneMatch[0];
+      }
+
+      // Address
+      if (line.includes('straße') || line.includes('str.') || line.includes('weg') || line.includes('platz')) {
+        parsed.personal.street = lines[i];
+      }
+
+      // Postal code and city
+      const postalMatch = lines[i].match(/(\d{5})\s+([A-Za-zäöüÄÖÜß\s]+)/);
+      if (postalMatch) {
+        parsed.personal.postalCode = postalMatch[1];
+        parsed.personal.city = postalMatch[2].trim();
+      }
+    }
+
+    return parsed;
+  };
+
   const handleClearProviders = () => {
     const clearedProviders = { ...defaultAIProviders };
     setAiProviders(clearedProviders);
@@ -36,13 +102,28 @@ function App() {
   };
 
   const toggleLanguage = () => {
+    const nextLanguage = language === 'de' ? 'en' : 'de';
+    setLanguage(nextLanguage);
     updateCvData({
       meta: {
         ...cvData.meta,
-        language: cvData.meta.language === 'de' ? 'en' : 'de'
+        language: nextLanguage
       }
     });
   };
+
+  useEffect(() => {
+    setCvData(prev => {
+      if (prev.meta.language === language) return prev;
+      return {
+        ...prev,
+        meta: {
+          ...prev.meta,
+          language
+        }
+      };
+    });
+  }, [language, setCvData]);
 
   const handleFormatChange = (format: 'classic' | 'ats') => {
     updateCvData({
@@ -55,7 +136,12 @@ function App() {
 
   // Show API key gate if no providers are configured
   if (!aiService.isConfigured()) {
-    return <ApiKeyGate onProvidersSet={handleProvidersSet} />;
+    return <ApiKeyGate
+      onProvidersSet={handleProvidersSet}
+      onUploadParsed={handleUploadParsed}
+      language={language}
+      onLanguageToggle={toggleLanguage}
+    />;
   }
 
   return (
@@ -63,14 +149,29 @@ function App() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">German CV Generator</h1>
-            <p className="text-sm text-gray-600">
-              {cvData.meta.language === 'de' 
-                ? 'Professioneller Lebenslauf nach DIN 5008' 
-                : 'Professional CV according to DIN 5008'
-              }
-            </p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => {
+                // Navigate back to landing page
+                handleClearProviders();
+                setMode('create');
+                setCvData(defaultCVData);
+                window.location.reload(); // Force reload to show ApiKeyGate
+              }}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              {cvData.meta.language === 'de' ? 'Zurück' : 'Back'}
+            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">German CV Generator</h1>
+              <p className="text-sm text-gray-600">
+                {cvData.meta.language === 'de' 
+                  ? 'Professioneller Lebenslauf nach DIN 5008' 
+                  : 'Professional CV according to DIN 5008'
+                }
+              </p>
+            </div>
           </div>
           
           <div className="flex items-center gap-3">
@@ -116,6 +217,37 @@ function App() {
               <Globe className="w-4 h-4" />
               {cvData.meta.language === 'de' ? 'Deutsch' : 'English'}
             </button>
+
+            {/* Create/Upload Toggle */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">
+                {cvData.meta.language === 'de' ? 'Modus:' : 'Mode:'}
+              </label>
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setMode('create')}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    mode === 'create'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <FileText className="w-4 h-4" />
+                  {cvData.meta.language === 'de' ? 'Erstellen' : 'Create'}
+                </button>
+                <button
+                  onClick={() => setMode('upload')}
+                  className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    mode === 'upload'
+                      ? 'bg-white text-blue-600 shadow-sm'
+                      : 'text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  {cvData.meta.language === 'de' ? 'Hochladen' : 'Upload'}
+                </button>
+              </div>
+            </div>
             
             {/* Settings Button */}
             <button
@@ -260,21 +392,35 @@ function App() {
               </div>
             )}
             
-            {/* Form sections will go here */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
-                {cvData.meta.language === 'de' ? 'CV-Bereiche' : 'CV Sections'}
-              </h3>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div>• {cvData.meta.language === 'de' ? 'Persönliche Daten' : 'Personal Information'}</div>
-                <div>• {cvData.meta.language === 'de' ? 'Berufserfahrung' : 'Work Experience'}</div>
-                <div>• {cvData.meta.language === 'de' ? 'Ausbildung' : 'Education'}</div>
-                <div>• {cvData.meta.language === 'de' ? 'Kenntnisse' : 'Skills'}</div>
-                <div>• {cvData.meta.language === 'de' ? 'Projekte' : 'Projects'}</div>
-                <div>• {cvData.meta.language === 'de' ? 'Zertifikate' : 'Certificates'}</div>
-                <div>• {cvData.meta.language === 'de' ? 'Hobbys' : 'Hobbies'}</div>
+            {/* CV Form */}
+            <CVForm
+              cvData={cvData}
+              onUpdate={updateCvData}
+              language={cvData.meta.language}
+            />
+
+            {/* Upload Content Display */}
+            {cvData.upload && mode === 'upload' && (
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-sm font-medium text-gray-900 mb-3">
+                  {cvData.meta.language === 'de' ? 'Hochgeladener CV' : 'Uploaded CV'}
+                </h3>
+                <div className="text-xs text-gray-600 mb-2">
+                  {cvData.upload.fileName} ({new Date(cvData.upload.parsedAt).toLocaleString()})
+                </div>
+                <div className="max-h-60 overflow-y-auto bg-gray-50 p-3 rounded-md">
+                  <pre className="text-xs text-gray-800 whitespace-pre-wrap">
+                    {cvData.upload.text}
+                  </pre>
+                </div>
+                <div className="mt-3 text-xs text-gray-600">
+                  {cvData.meta.language === 'de' 
+                    ? 'Die geparsten Daten wurden automatisch in die Formularfelder übertragen.'
+                    : 'Parsed data has been automatically transferred to the form fields.'
+                  }
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
 

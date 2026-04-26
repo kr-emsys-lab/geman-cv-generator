@@ -106,14 +106,15 @@ The app never stores or proxies API keys through any server. All keys live only 
 
 ### 3.1 Key Entry Flow
 
-1. On first load, if no AI provider is configured, the app renders a **full-screen AI Provider Setup** component.
-2. The user can configure multiple providers:
+1. On first load, if no AI provider is configured, the app renders a **full-screen onboarding page** that explains the product and offers two start paths: `Create CV from scratch` or `Upload existing CV`.
+2. After the user chooses a flow, the app displays the provider setup panel.
+3. The user can configure multiple providers:
    - **OpenAI**: `sk-proj-...` or `sk-...` key format
    - **Google Gemini**: `AI...` key format  
    - **Anthropic**: `sk-ant-...` key format
-3. Each provider has a "Test Connection" button that validates the key with a simple API call.
-4. The user selects an active provider from a dropdown.
-5. At any time the user can manage providers from the Settings panel.
+4. Each provider has a "Test Connection" button that validates the key with a simple API call.
+5. The user selects an active provider from a dropdown.
+6. At any time the user can manage providers from the Settings panel.
 
 ### 3.2 Unified AI Service
 

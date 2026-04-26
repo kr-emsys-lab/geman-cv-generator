@@ -27,6 +27,11 @@ export interface CVData {
   projects: ProjectEntry[];
   certificates: CertificateEntry[];
   hobbies: string;
+  upload?: {
+    fileName: string;
+    text: string;
+    parsedAt: string;
+  };
   meta: {
     language: 'de' | 'en';
     designFormat: 'classic' | 'ats';
